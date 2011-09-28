@@ -38,7 +38,7 @@ class Parser(object):
                     tag_name = tag_name[1:]
 
                     if tag_name not in self.tags:
-                        current.children.append(Tag(self, text=token))
+                        Tag(self, text=token, parent=current)
                         continue
 
                     if current.name == tag_name:
@@ -47,7 +47,7 @@ class Parser(object):
                     cls = self.tags.get(tag_name)
 
                     if cls is None:
-                        current.children.append(Tag(self, text=token))
+                        Tag(self, text=token, parent=current)
                         continue
                     
                     tag = cls(self, tag_name, parent=current, params=params)
@@ -55,15 +55,9 @@ class Parser(object):
                     if not tag.SELF_CLOSE and (tag_name not in cls.CLOSED_BY or current.name != tag_name):
                         current = tag
             else:
-                current.children.append(Tag(self, text=token))
+                Tag(self, text=token, parent=current)
 
         return root
 
-    def to_html(self, bbcode, prettify=False):
-        html = self.parse(bbcode).to_html()
-
-        if prettify:
-            from BeautifulSoup import BeautifulSoup
-            html = BeautifulSoup(html).prettify()
-
-        return html
+    def to_html(self, bbcode):
+        return self.parse(bbcode).to_html()

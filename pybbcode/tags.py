@@ -2,7 +2,8 @@ import re
 
 _PARAM_RE = re.compile(r"""^["'](.+)["']$""")
 
-_NEWLINE_RE = re.compile('\\r?\n')
+_NEWLINE_RE = re.compile(r'\r?\n')
+_START_NEWLINE_RE = re.compile(r'^\r?\n')
 _LINE_BREAK = u'<br />'
 
 _ESCAPE_RE = re.compile('[&<>"]')
@@ -34,6 +35,8 @@ class Tag(object):
     CLOSED_BY = []
     SELF_CLOSE = False
     STRIP_INNER = False
+    STRIP_OUTER = False
+    DISCARD_TEXT = False
 
     def __init__(self, parser, name=None, parent=None, text=u'', params=None):
         self.parser = parser
@@ -44,6 +47,9 @@ class Tag(object):
         self.parent = parent
 
         if parent:
+            if name is None and self.parent.children and parent.children[-1].STRIP_OUTER:
+                self.text = _START_NEWLINE_RE.sub('', self.text, 1)
+
             parent.children.append(self)
 
         self._raw_params = params or []
@@ -72,13 +78,15 @@ class Tag(object):
         return self._params
 
     def get_content(self, raw=False):
-        if raw:
-            pieces = [self.text]
-        else:
-            pieces = [_NEWLINE_RE.sub(_LINE_BREAK, self.linkify(self.escape(self.text)))]
+        pieces = []
 
-        if pieces[0]:
-            pieces[0] = _cosmetic_replace(pieces[0])
+        if self.text:
+            text = self.text
+
+            if not raw:
+                text = _cosmetic_replace(_NEWLINE_RE.sub(_LINE_BREAK, self.linkify(self.escape(text))))
+                
+            pieces.append(text)
 
         children = self.children
 
@@ -86,6 +94,9 @@ class Tag(object):
             if raw:
                 pieces.append(child.to_bbcode())
             else:
+                if self.DISCARD_TEXT and child.name is None:
+                    continue
+
                 pieces.append(child.to_html())
                 
         content = ''.join(pieces)
@@ -151,7 +162,18 @@ class Tag(object):
 
         return _URL_RE.sub(make_link, text)
 
+    def _to_html_attributes(self, attributes=None):
+        if attributes is None:
+            attributes = self.params
+
+        if not attributes:
+            return u''
+
+        return u' '.join(u'%s="%s"' % item for item in attributes.items())
+
 class CodeTag(Tag):
+    STRIP_INNER = True
+    
     def _to_html(self):
         if self.params.get('code') == 'inline':
             return u'<code>', self.get_content(True), u'</code>'
@@ -175,7 +197,7 @@ class ImageTag(Tag):
         if 'height' in self.params:
             attributes['height'] = self.params['height']
 
-        return u'<img %s />' % ' '.join('%s="%s"' % item for item in attributes.items()),
+        return u'<img %s />' % self._to_html_attributes(attributes),
     
 class SizeTag(Tag):
     def _to_html(self):
@@ -210,12 +232,14 @@ class RightTag(Tag):
 
 class HorizontalRuleTag(Tag):
     SELF_CLOSE = True
+    STRIP_OUTER = True
 
     def _to_html(self):
         return u'<hr />',
 
 class ListTag(Tag):
     STRIP_INNER = True
+    STRIP_OUTER = True
 
     def _to_html(self):
         list_type = self.params.get('list')
@@ -238,6 +262,7 @@ class ListItemTag(Tag):
 
 class QuoteTag(Tag):
     STRIP_INNER = True
+    STRIP_OUTER = True
     
     def _to_html(self):
         pieces = [u'<blockquote>', self.get_content()]
@@ -277,23 +302,37 @@ class LinkTag(Tag):
         else:
             return self.get_content()
 
-def create_simple_tag(name):
-    return type('%sTag' % name.title(), (Tag,), {
-        '_to_html': lambda self: (u'<%s>' % name, self.get_content(), u'</%s>' % name,)
-    })
+def create_simple_tag(name, **attributes):
+    def _to_html(self):
+        html_attributes = self._to_html_attributes()
+
+        if html_attributes:
+            html_attributes = ' ' + html_attributes
+            
+        return u'<%s%s>' % (name, html_attributes), self.get_content(), u'</%s>' % name,
+
+    attributes['_to_html'] = _to_html
+    
+    return type('%sTag' % name.title(), (Tag,), attributes)
 
 BUILTIN_TAGS = {
     'b': create_simple_tag('strong'),
     'i': create_simple_tag('em'),
     'u': create_simple_tag('u'),
     's': create_simple_tag('strike'),
-    'h1': create_simple_tag('h1'),
-    'h2': create_simple_tag('h2'),
-    'h3': create_simple_tag('h3'),
-    'h4': create_simple_tag('h4'),
-    'h5': create_simple_tag('h5'),
-    'h6': create_simple_tag('h6'),
+    'h1': create_simple_tag('h1', STRIP_OUTER=True),
+    'h2': create_simple_tag('h2', STRIP_OUTER=True),
+    'h3': create_simple_tag('h3', STRIP_OUTER=True),
+    'h4': create_simple_tag('h4', STRIP_OUTER=True),
+    'h5': create_simple_tag('h5', STRIP_OUTER=True),
+    'h6': create_simple_tag('h6', STRIP_OUTER=True),
     'pre': create_simple_tag('pre'),
+    'table': create_simple_tag('table', DISCARD_TEXT=True),
+    'thead': create_simple_tag('thead', DISCARD_TEXT=True),
+    'tbody': create_simple_tag('tbody', DISCARD_TEXT=True),
+    'tr': create_simple_tag('tr', DISCARD_TEXT=True),
+    'th': create_simple_tag('th'),
+    'td': create_simple_tag('td'),
     'code': CodeTag,
     'hr': HorizontalRuleTag,
     'img': ImageTag,
