@@ -41,5 +41,8 @@ class TestBBCodeParser(unittest.TestCase):
     def test_document2(self):
         self._assertEqual('document2')
 
+    def test_document3(self):
+        print self._to_html(self._read_file('document1.bbcode'))
+
 if __name__ == '__main__':
     unittest.main()

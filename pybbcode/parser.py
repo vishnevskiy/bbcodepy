@@ -26,7 +26,7 @@ class Parser(object):
             token = tokens.pop(0)
 
             if re.match(TOKEN_RE, token):
-                params = [argument.split('=') for argument in token[1:-1].split()]
+                params = [argument.partition('=') for argument in token[1:-1].split()]
                 tag_name = params[0][0].lower()
 
                 if tag_name in current.CLOSED_BY:
@@ -59,5 +59,11 @@ class Parser(object):
 
         return root
 
-    def to_html(self, bbcode):
-        return self.parse(bbcode).to_html()
+    def to_html(self, bbcode, prettify=False):
+        html = self.parse(bbcode).to_html()
+
+        if prettify:
+            from BeautifulSoup import BeautifulSoup
+            html = BeautifulSoup(html).prettify()
+
+        return html

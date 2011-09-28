@@ -9,10 +9,7 @@ _LINE_BREAK = u'<br />'
 _ESCAPE_RE = re.compile('[&<>"]')
 _ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}
 
-_URL_RE = re.compile(
-    ur'''\b((?:([\w-]+):(/{1,3})|www[.])'(?:(?:(?:[^\s&()]|&amp;|&quot;)*'''
-    ur'''(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)'''
-)
+_URL_RE = re.compile(ur'''\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)''')
 
 _COSMETIC_DICT = {
     u'--': u'&ndash;',
@@ -63,17 +60,14 @@ class Tag(object):
             self._params = {}
 
             if self._raw_params:
-                for argument in self._raw_params:
-                    if len(argument) == 2:
-                        value = argument[1]
+                for key, _, value in self._raw_params:
+                    if value:
+                        try:
+                            value = _PARAM_RE.findall(value)[0]
+                        except IndexError:
+                            pass
 
-                        if value:
-                            try:
-                                value = _PARAM_RE.findall(value)[0]
-                            except IndexError:
-                                pass
-
-                        self.params[argument[0]] = value
+                        self.params[key] = value
 
         return self._params
 
@@ -81,10 +75,10 @@ class Tag(object):
         pieces = []
 
         if self.text:
-            text = self.text
+            text = self.escape(self.text)
 
             if not raw:
-                text = _cosmetic_replace(_NEWLINE_RE.sub(_LINE_BREAK, self.linkify(self.escape(text))))
+                text = _cosmetic_replace(_NEWLINE_RE.sub(_LINE_BREAK, self.linkify(text)))
                 
             pieces.append(text)
 
@@ -92,7 +86,7 @@ class Tag(object):
 
         for child in children:
             if raw:
-                pieces.append(child.to_bbcode())
+                pieces.append(child.to_text())
             else:
                 if self.DISCARD_TEXT and child.name is None:
                     continue
@@ -114,7 +108,7 @@ class Tag(object):
 
         return content
 
-    def to_bbcode(self, content_as_html=False):
+    def to_text(self, content_as_html=False):
         pieces = []
 
         if self.name is not None:
@@ -136,7 +130,7 @@ class Tag(object):
         return ''.join(pieces)
 
     def _to_html(self):
-        return self.to_bbcode(True),
+        return self.to_text(True),
 
     def to_html(self):
         return ''.join(self._to_html())
@@ -205,7 +199,7 @@ class SizeTag(Tag):
 
         try:
             size = int(size)
-        except ValueError:
+        except (TypeError, ValueError):
             size = None
 
         if size is None:
@@ -290,10 +284,9 @@ class LinkTag(Tag):
         url = (self.params.get(self.name) or self.get_content(True)).strip()
 
         if u'javascript:' in url.lower():
-            return u''
-
-        if u':' not in url:
-          url = u'http://' + url
+            url = u''
+        elif u':' not in url:
+            url = u'http://' + url
 
         url = ''.join([c if c in LinkTag.SAFE_CHARS else '%%%02X' % ord(c) for c in url])
         
