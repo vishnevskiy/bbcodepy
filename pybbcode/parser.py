@@ -1,7 +1,11 @@
 from .tags import BUILTIN_TAGS, Tag
+from .renderer import Renderer
 import re
 
-TOKEN_RE = re.compile(r'(\[/?.+?\])')
+_WHITESPACE = ' '
+_TOKEN_RE = re.compile(r'(\[/?.+?\])')
+_START_NEWLINE_RE = re.compile(r'^\r?\n')
+_END_NEWLINE_RE = re.compile(r'\r?\n$')
 
 class Parser(object):
     def __init__(self, allowed_tags=None):
@@ -14,20 +18,63 @@ class Parser(object):
                 if tag in BUILTIN_TAGS:
                     self.tags[tag] = BUILTIN_TAGS[tag]
 
+        self.renderer = Renderer()
+
     def register_tag(self, name, tag):
         self.tags[name] = tag
 
-    def parse(self, bbcode):
-        current = root = Tag(self)
+    def _parse_params(self, token):
+        params = []
 
-        tokens = TOKEN_RE.split(bbcode)
+        if token:
+            target = key = []
+            value = []
+            terminate = _WHITESPACE
+            skip_next = False
+
+            for c in token:
+                if skip_next:
+                    skip_next = False
+                elif c == '=':
+                    target = value
+                elif not value and c == '"':
+                    terminate = c
+                elif c != terminate:
+                    target.append(c)
+                else:
+                    params.append((''.join(key).lower(), ''.join(value)))
+
+                    if not terminate.isspace():
+                        skip_next = True
+
+                    target = key = []
+                    value = []
+                    terminate = _WHITESPACE
+
+            params.append((''.join(key).lower(), ''.join(value)))
+
+        return params
+
+    def _create_text_node(self, parent, text):
+        if parent.children and parent.children[-1].STRIP_OUTER:
+            tag = Tag(self.renderer, text=_START_NEWLINE_RE.sub('', text, 1), parent=parent)
+            
+            if tag.text.isspace():
+                tag._stripped_outer = True
+        else:
+            Tag(self.renderer, text=text, parent=parent)
+
+    def parse(self, bbcode):
+        current = root = Tag(self.renderer)
+
+        tokens = _TOKEN_RE.split(bbcode)
 
         while tokens:
             token = tokens.pop(0)
 
-            if re.match(TOKEN_RE, token):
-                params = [argument.partition('=') for argument in token[1:-1].split()]
-                tag_name = params[0][0].lower()
+            if re.match(_TOKEN_RE, token):
+                params = self._parse_params(token[1:-1])
+                tag_name = params[0][0]
 
                 if tag_name in current.CLOSED_BY:
                     tokens.insert(0, token)
@@ -38,7 +85,7 @@ class Parser(object):
                     tag_name = tag_name[1:]
 
                     if tag_name not in self.tags:
-                        Tag(self, text=token, parent=current)
+                        self._create_text_node(current, token)
                         continue
 
                     if current.name == tag_name:
@@ -47,15 +94,21 @@ class Parser(object):
                     cls = self.tags.get(tag_name)
 
                     if cls is None:
-                        Tag(self, text=token, parent=current)
+                        self._create_text_node(current, token)
                         continue
-                    
-                    tag = cls(self, tag_name, parent=current, params=params)
+
+                    tag = cls(self.renderer, tag_name, parent=current, params=params)
+
+                    if tag.STRIP_OUTER and len(tag.parent.children) > 1:
+                        sibling = tag.parent.children[-2]
+
+                        if sibling.name is None and not hasattr(sibling, '_stripped_outer'):
+                            sibling.text = _END_NEWLINE_RE.sub('', sibling.text, 1)
 
                     if not tag.SELF_CLOSE and (tag_name not in cls.CLOSED_BY or current.name != tag_name):
                         current = tag
             else:
-                Tag(self, text=token, parent=current)
+                self._create_text_node(current, token)
 
         return root
 

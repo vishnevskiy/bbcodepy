@@ -1,32 +1,7 @@
 import re
 
-_PARAM_RE = re.compile(r"""^["'](.+)["']$""")
-
 _NEWLINE_RE = re.compile(r'\r?\n')
-_START_NEWLINE_RE = re.compile(r'^\r?\n')
 _LINE_BREAK = u'<br />'
-
-_ESCAPE_RE = re.compile('[&<>"]')
-_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}
-
-_URL_RE = re.compile(ur'''\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)''')
-
-_COSMETIC_DICT = {
-    u'--': u'&ndash;',
-    u'---': u'&mdash;',
-    u'...': u'&#8230;',
-    u'(c)': u'&copy;',
-    u'(reg)': u'&reg;',
-    u'(tm)': u'&trade;',
-}
-_COSMETIC_RE = re.compile(u'|'.join(re.escape(key) for key in _COSMETIC_DICT.keys()))
-
-def _cosmetic_replace(s):
-    def repl(match):
-        item = match.group(0)
-        return _COSMETIC_DICT.get(item, item)
-
-    return _COSMETIC_RE.sub(repl, s)
 
 class Tag(object):
     CLOSED_BY = []
@@ -35,18 +10,15 @@ class Tag(object):
     STRIP_OUTER = False
     DISCARD_TEXT = False
 
-    def __init__(self, parser, name=None, parent=None, text=u'', params=None):
-        self.parser = parser
-        
+    def __init__(self, renderer, name=None, parent=None, text=u'', params=None):
+        self.renderer = renderer
+
         self.name = name
         self.text = text
 
         self.parent = parent
 
         if parent:
-            if name is None and self.parent.children and parent.children[-1].STRIP_OUTER:
-                self.text = _START_NEWLINE_RE.sub('', self.text, 1)
-
             parent.children.append(self)
 
         self._raw_params = params or []
@@ -60,13 +32,8 @@ class Tag(object):
             self._params = {}
 
             if self._raw_params:
-                for key, _, value in self._raw_params:
+                for key, value in self._raw_params:
                     if value:
-                        try:
-                            value = _PARAM_RE.findall(value)[0]
-                        except IndexError:
-                            pass
-
                         self.params[key] = value
 
         return self._params
@@ -75,11 +42,14 @@ class Tag(object):
         pieces = []
 
         if self.text:
-            text = self.escape(self.text)
+            text = self.renderer.escape(self.text)
 
             if not raw:
-                text = _cosmetic_replace(_NEWLINE_RE.sub(_LINE_BREAK, self.linkify(text)))
-                
+                if self.renderer.options['linkify']:
+                    text = self.renderer.linkify(text)
+
+                text = self.renderer.cosmetic_replace(_NEWLINE_RE.sub(_LINE_BREAK, text))
+
             pieces.append(text)
 
         children = self.children
@@ -92,7 +62,7 @@ class Tag(object):
                     continue
 
                 pieces.append(child.to_html())
-                
+
         content = ''.join(pieces)
 
         if not raw and self.STRIP_INNER:
@@ -135,44 +105,21 @@ class Tag(object):
     def to_html(self):
         return ''.join(self._to_html())
 
-    def escape(self, value):
-        """Escapes a string so it is valid within XML or XHTML."""
-        return _ESCAPE_RE.sub(lambda match: _ESCAPE_DICT[match.group(0)], value)
-
-    def linkify(self, text):
-        def make_link(m):
-            url = m.group(1)
-            proto = m.group(2)
-
-            if proto and proto not in ['http', 'https']:
-                return url # bad protocol, no linkify
-
-            href = m.group(1)
-
-            if not proto:
-                href = 'http://' + href # no proto specified, use http
-
-            return u'<a href="%s" target="_blank">%s</a>' % (href, url)
-
-        return _URL_RE.sub(make_link, text)
-
-    def _to_html_attributes(self, attributes=None):
-        if attributes is None:
-            attributes = self.params
-
-        if not attributes:
-            return u''
-
-        return u' '.join(u'%s="%s"' % item for item in attributes.items())
-
 class CodeTag(Tag):
     STRIP_INNER = True
-    
+
+    def __init__(self, *args, **kwargs):
+        Tag.__init__(self, *args, **kwargs)
+        self._inline = self.params.get('code') == 'inline'
+
+        if not self._inline:
+            self.STRIP_OUTER = True
+
     def _to_html(self):
-        if self.params.get('code') == 'inline':
+        if self._inline:
             return u'<code>', self.get_content(True), u'</code>'
 
-        lang = self.params.get('lang')
+        lang = self.params.get('lang') or self.params.get(self.name)
 
         if lang:
             return u'<pre class="prettyprint lang-%s">' % lang, self.get_content(True), u'</pre>',
@@ -191,8 +138,8 @@ class ImageTag(Tag):
         if 'height' in self.params:
             attributes['height'] = self.params['height']
 
-        return u'<img %s />' % self._to_html_attributes(attributes),
-    
+        return u'<img %s />' % self.renderer.html_attributes(attributes),
+
 class SizeTag(Tag):
     def _to_html(self):
         size = self.params.get('size')
@@ -257,7 +204,7 @@ class ListItemTag(Tag):
 class QuoteTag(Tag):
     STRIP_INNER = True
     STRIP_OUTER = True
-    
+
     def _to_html(self):
         pieces = [u'<blockquote>', self.get_content()]
 
@@ -289,23 +236,24 @@ class LinkTag(Tag):
             url = u'http://' + url
 
         url = ''.join([c if c in LinkTag.SAFE_CHARS else '%%%02X' % ord(c) for c in url])
-        
+
         if url:
-            return u'<a href="%s" target="_blank">%s</a>' % (url, self.get_content())
+            with self.renderer(linkify=False):
+                return u'<a href="%s" target="_blank">%s</a>' % (url, self.get_content())
         else:
             return self.get_content()
 
 def create_simple_tag(name, **attributes):
     def _to_html(self):
-        html_attributes = self._to_html_attributes()
+        html_attributes = self.renderer.html_attributes(self.params)
 
         if html_attributes:
             html_attributes = ' ' + html_attributes
-            
+
         return u'<%s%s>' % (name, html_attributes), self.get_content(), u'</%s>' % name,
 
     attributes['_to_html'] = _to_html
-    
+
     return type('%sTag' % name.title(), (Tag,), attributes)
 
 BUILTIN_TAGS = {
