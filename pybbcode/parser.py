@@ -5,7 +5,6 @@ import re
 _WHITESPACE = ' '
 _TOKEN_RE = re.compile(r'(\[/?.+?\])')
 _START_NEWLINE_RE = re.compile(r'^\r?\n')
-_END_NEWLINE_RE = re.compile(r'\r?\n$')
 
 class Parser(object):
     def __init__(self, allowed_tags=None):
@@ -52,17 +51,14 @@ class Parser(object):
                     terminate = _WHITESPACE
 
             params.append((''.join(key).lower(), ''.join(value)))
-
+            
         return params
-
+    
     def _create_text_node(self, parent, text):
         if parent.children and parent.children[-1].STRIP_OUTER:
-            tag = Tag(self.renderer, text=_START_NEWLINE_RE.sub('', text, 1), parent=parent)
-            
-            if tag.text.isspace():
-                tag._stripped_outer = True
-        else:
-            Tag(self.renderer, text=text, parent=parent)
+            text = _START_NEWLINE_RE.sub('', text, 1)
+
+        Tag(self.renderer, text=text, parent=parent)
 
     def parse(self, bbcode):
         current = root = Tag(self.renderer)
@@ -96,14 +92,8 @@ class Parser(object):
                     if cls is None:
                         self._create_text_node(current, token)
                         continue
-
+                    
                     tag = cls(self.renderer, tag_name, parent=current, params=params)
-
-                    if tag.STRIP_OUTER and len(tag.parent.children) > 1:
-                        sibling = tag.parent.children[-2]
-
-                        if sibling.name is None and not hasattr(sibling, '_stripped_outer'):
-                            sibling.text = _END_NEWLINE_RE.sub('', sibling.text, 1)
 
                     if not tag.SELF_CLOSE and (tag_name not in cls.CLOSED_BY or current.name != tag_name):
                         current = tag
