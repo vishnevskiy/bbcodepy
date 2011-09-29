@@ -34,7 +34,7 @@ class Parser(object):
             for c in token:
                 if skip_next:
                     skip_next = False
-                elif c == '=':
+                elif target == key and c == '=':
                     target = value
                 elif not value and c == '"':
                     terminate = c

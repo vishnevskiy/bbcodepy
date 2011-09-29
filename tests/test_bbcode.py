@@ -35,6 +35,9 @@ class TestBBCodeParser(unittest.TestCase):
         for test, result in tests:
             self.assertEqual(self._to_html(test, False), result)
 
+    def test_equal_sign_in_attributes(self):
+        self.assertEqual(self._to_html('[url="http://mysite.com?page=home"]Home[/url]', False), '<a href="http://mysite.com?page=home" target="_blank">Home</a>')
+
     def test_document1(self):
         self._assertEqual('document1')
 
@@ -54,7 +57,7 @@ class TestBBCodeParser(unittest.TestCase):
 #        print '%.2fms' % (time.time() - st)
 
 
-        print self._to_html(self._read_file('document1.bbcode'))
+        print self._to_html(self._read_file('document2.bbcode'))
 
 if __name__ == '__main__':
     unittest.main()
