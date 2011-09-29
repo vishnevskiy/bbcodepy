@@ -94,7 +94,7 @@ class Tag(object):
 
         pieces.append(self.get_content(not content_as_html))
 
-        if self.name is not None:
+        if self.name is not None and self.name not in self.CLOSED_BY:
             pieces.append(u'[/%s]' % self.name)
 
         return ''.join(pieces)
