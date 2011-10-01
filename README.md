@@ -23,7 +23,7 @@ class YoutubeTag(bbcode.Tag)
     def to_html(self):
         attributes = {
             'src': self.get_content(true).strip(),
-            'width': self.params.get('width', 420)
+            'width': self.params.get('width', 420),
             'height': self.params.get('height', 315)
         }
 
