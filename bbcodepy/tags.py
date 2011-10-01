@@ -103,7 +103,8 @@ class Tag(object):
         return self.to_text(True),
 
     def to_html(self):
-        return ''.join(self._to_html())
+        html = self._to_html()
+        return html if isinstance(html, basestring) else ''.join(html)
 
 class CodeTag(Tag):
     STRIP_INNER = True
@@ -138,7 +139,7 @@ class ImageTag(Tag):
         if 'height' in self.params:
             attributes['height'] = self.params['height']
 
-        return u'<img %s />' % self.renderer.html_attributes(attributes),
+        return u'<img %s />' % self.renderer.html_attributes(attributes)
 
 class SizeTag(Tag):
     def _to_html(self):
@@ -176,7 +177,7 @@ class HorizontalRuleTag(Tag):
     STRIP_OUTER = True
 
     def _to_html(self):
-        return u'<hr />',
+        return u'<hr />'
 
 class ListTag(Tag):
     STRIP_INNER = True
@@ -239,7 +240,7 @@ class LinkTag(Tag):
 
         if url:
             with self.renderer(linkify=False):
-                return u'<a href="%s" target="_blank">%s</a>' % (url, self.get_content())
+                return u'<a href="%s" target="_blank">' % url, self.get_content(), '</a>'
         else:
             return self.get_content()
 
