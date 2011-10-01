@@ -1,11 +1,11 @@
 import inspect
 import os
 import unittest
-from pybbcode.parser import Parser
+import bbcodepy
 
 class TestBBCodeParser(unittest.TestCase):
     def _to_html(self, bbcode, prettify=True):
-        return Parser().to_html(bbcode, prettify)
+        return bbcodepy.Parser().to_html(bbcode, prettify)
 
     def _read_file(self, name):
         with open(os.path.join(os.path.dirname(inspect.getfile(self.__class__)), 'static', name)) as f:
