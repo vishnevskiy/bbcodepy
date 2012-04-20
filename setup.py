@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 DESCRIPTION = "Python Library for rendering BBCode."
 
-with open('README.rst') as f:
+with open('README.md') as f:
     LONG_DESCRIPTION = f.read()
 
 VERSION = '0.1.0'
