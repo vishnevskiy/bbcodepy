@@ -50,6 +50,12 @@ class Renderer(object):
             if not proto:
                 href = 'http://' + href # no proto specified, use http
 
+            from lib.oembed import OEmbed
+            html = OEmbed(href).render()
+
+            if html:
+                return html
+
             return u'<a href="%s" target="_blank">%s</a>' % (href, url)
 
         return _URL_RE.sub(make_link, text)

@@ -95,7 +95,7 @@ class Parser(object):
                     
                     tag = cls(self.renderer, tag_name, parent=current, params=params)
 
-                    if not tag.SELF_CLOSE and (tag_name not in tag.CLOSED_BY or current.name != tag_name):
+                    if not tag.SELF_CLOSE and (tag_name not in cls.CLOSED_BY or current.name != tag_name):
                         current = tag
             else:
                 self._create_text_node(current, token)

@@ -103,8 +103,7 @@ class Tag(object):
         return self.to_text(True),
 
     def to_html(self):
-        html = self._to_html()
-        return html if isinstance(html, basestring) else ''.join(html)
+        return ''.join(self._to_html())
 
 class CodeTag(Tag):
     STRIP_INNER = True
@@ -120,12 +119,14 @@ class CodeTag(Tag):
         if self._inline:
             return u'<code>', self.get_content(True), u'</code>'
 
+        content = self.get_content(True)
+
         lang = self.params.get('lang') or self.params.get(self.name)
 
         if lang:
-            return u'<pre class="prettyprint lang-%s">' % lang, self.get_content(True), u'</pre>',
+            return u'<pre class="prettyprint lang-%s linenums">' % lang, content, u'</pre>',
         else:
-            return u'<pre>', self.get_content(True), u'</pre>',
+            return u'<pre class="prettyprint linenums">', content, u'</pre>',
 
 class ImageTag(Tag):
     def _to_html(self):
@@ -139,7 +140,10 @@ class ImageTag(Tag):
         if 'height' in self.params:
             attributes['height'] = self.params['height']
 
-        return u'<img %s />' % self.renderer.html_attributes(attributes)
+        if 'width' not in attributes and 'height' not in attributes:
+            attributes['class'] = 'bbcode'
+
+        return u'<img %s />' % self.renderer.html_attributes(attributes),
 
 class SizeTag(Tag):
     def _to_html(self):
@@ -177,7 +181,7 @@ class HorizontalRuleTag(Tag):
     STRIP_OUTER = True
 
     def _to_html(self):
-        return u'<hr />'
+        return u'<hr />',
 
 class ListTag(Tag):
     STRIP_INNER = True
@@ -240,7 +244,7 @@ class LinkTag(Tag):
 
         if url:
             with self.renderer(linkify=False):
-                return u'<a href="%s" target="_blank">' % url, self.get_content(), '</a>'
+                return u'<a href="%s" target="_blank">%s</a>' % (url, self.get_content())
         else:
             return self.get_content()
 
