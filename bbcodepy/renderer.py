@@ -50,8 +50,7 @@ class Renderer(object):
             if not proto:
                 href = 'http://' + href # no proto specified, use http
 
-            from guildwork.lib.oembed import OEmbed
-            html = OEmbed(href).render()
+            html = self.process_link(link)
 
             if html:
                 return html
@@ -59,6 +58,9 @@ class Renderer(object):
             return u'<a href="%s" target="_blank">%s</a>' % (href, url)
 
         return _URL_RE.sub(make_link, text)
+    
+    def process_link(self, link):
+        pass
 
     def cosmetic_replace(self, s):
         def repl(match):
