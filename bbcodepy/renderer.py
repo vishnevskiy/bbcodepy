@@ -50,7 +50,7 @@ class Renderer(object):
             if not proto:
                 href = 'http://' + href # no proto specified, use http
 
-            from lib.oembed import OEmbed
+            from guildwork.lib.oembed import OEmbed
             html = OEmbed(href).render()
 
             if html:
