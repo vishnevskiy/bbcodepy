@@ -50,7 +50,7 @@ class Renderer(object):
             if not proto:
                 href = 'http://' + href # no proto specified, use http
 
-            html = self.process_link(link)
+            html = self.process_link(href)
 
             if html:
                 return html
@@ -59,7 +59,7 @@ class Renderer(object):
 
         return _URL_RE.sub(make_link, text)
     
-    def process_link(self, link):
+    def process_link(self, href):
         pass
 
     def cosmetic_replace(self, s):
